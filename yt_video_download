@@ -1,0 +1,59 @@
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+const csv = require('csv-parser');
+
+const basePath = path.join(__dirname, 'Youtube_downloads2');
+const csvFilePath = path.join(__dirname, 'LPS_Video.csv'); // Change if needed
+
+// Ensure base directory exists
+if (!fs.existsSync(basePath)) {
+    fs.mkdirSync(basePath, { recursive: true });
+}
+ 
+// Function to extract video ID from YouTube URL
+const getVideoId = (url) => {
+    const match = url.match(/v=([a-zA-Z0-9_-]+)/);
+    return match ? match[1] : null;
+};
+
+// Function to download video/audio using yt-dlp
+const downloadVideo = (url) => {
+    try {
+        const videoId = getVideoId(url);
+        if (!videoId) {
+            console.log(`Skipping invalid URL: ${url}`);
+            return;
+        }
+
+        const videoFolder = path.join(basePath, videoId);
+        if (!fs.existsSync(videoFolder)) {
+            fs.mkdirSync(videoFolder, { recursive: true });
+        }
+
+        const completeVideoPath = path.join(videoFolder, `${videoId}_complete.mp4`);
+        
+        // Download complete video with audio
+        const completeVideoCmd = `python -m yt_dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" -o "${completeVideoPath}" "${url}"`;
+        console.log(`Downloading complete video with audio: ${url}`);
+        execSync(completeVideoCmd, { stdio: 'inherit' });
+        console.log(`Downloaded complete video: ${url}\n`);
+
+    } catch (error) {
+        console.error(`Error downloading ${url}:`, error.message);
+    }
+};
+
+// Read CSV and process each URL
+fs.createReadStream(csvFilePath)
+    .pipe(csv())
+    .on('data', (row) => {
+        const columnName = 'Youtube link (Explore_More)'; // Change if necessary
+        const url = row[columnName];
+        if (url) {
+            downloadVideo(url);
+        }
+    })
+    .on('end', () => {
+        console.log('All downloads completed.');
+    });
